@@ -5,7 +5,7 @@ val mockk_version: String by project.extra
 kotlin {
     nixTargets().forEach {
         it.compilations.getByName("main").cinterops {
-            val network by creating {
+            create("network_${it.name}") {
                 defFile = projectDir.resolve("nix/interop/network.def")
             }
         }
@@ -23,6 +23,20 @@ kotlin {
                 api(project(":ktor-test-dispatcher"))
             }
         }
+
+        // val nixX86Main by creating {
+        // }
+
+        // val nixX64Main by creating {
+        // }
+
+        // nixX64Targets().forEach {
+        //     getByName("${it.name}Main").dependsOn(nixX64Main)
+        // }
+
+        // nixX86Targets().forEach {
+        //     getByName("${it.name}Main").dependsOn(nixX86Main)
+        // }
 
         val jvmTest by getting {
             dependencies {

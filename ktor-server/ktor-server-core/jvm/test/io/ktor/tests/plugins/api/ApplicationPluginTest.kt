@@ -9,8 +9,9 @@ import io.ktor.server.routing.*
 import io.ktor.server.testing.*
 import io.ktor.util.*
 import io.ktor.utils.io.*
+import io.ktor.utils.io.core.*
+import kotlinx.coroutines.*
 import org.junit.Test
-import java.math.*
 import kotlin.test.*
 
 class ApplicationPluginTest {
@@ -469,51 +470,49 @@ class ApplicationPluginTest {
     }
 
     @Test
-    fun testTransformBody() {
-        class MyInt(val x: Int)
+    fun testTransformBody() = withTestApplication {
+        data class MyInt(val x: Int)
 
         val plugin = createApplicationPlugin("F") {
-            onCallReceive { _ ->
+            onCallReceive {
                 transformBody { data ->
-                    if (requestedType?.type == MyInt::class) {
-                        MyInt(data.readInt())
-                    } else {
-                        data
-                    }
+                    val type = requestedType?.type!!
+                    if (type != MyInt::class) return@transformBody data
+
+                    MyInt(data.readInt())
                 }
             }
             onCallRespond { _ ->
                 transformBody { data ->
-                    if (data is MyInt) {
-                        val bc = ByteChannel(false)
-                        bc.writeInt(data.x)
-                        bc
-                    } else {
-                        data
+                    if (data !is MyInt) return@transformBody data
+
+                    return@transformBody ByteChannel(false).apply {
+                        writeInt(data.x)
+                        close()
                     }
                 }
+           }
+        }
+
+        application.install(plugin)
+
+        application.routing {
+            post("/receive") {
+                val data = call.receive<MyInt>()
+                val newData = MyInt(data.x + 1)
+                call.respond(newData)
             }
         }
 
-        fun assertWithPlugin(expectedResponse: Int) = withTestApplication {
-            application.install(plugin)
-
-            application.routing {
-                post("/receive") {
-                    val data = call.receive<MyInt>()
-                    val newData = MyInt(data.x + 1)
-                    call.respond(newData)
-                }
-            }
-
-            handleRequest(HttpMethod.Post, "/receive") {
-                setBody(BigInteger.valueOf(100500).toByteArray()) // sending bytes of 100500
-            }.let { call ->
-                val content = call.response.content?.toInt()
-                assertEquals(expectedResponse, content)
-            }
+        val call = handleRequest(HttpMethod.Post, "/receive") {
+            setBody(buildPacket {
+                writeInt(100501)
+            })
         }
 
-        assertWithPlugin(expectedResponse = 100501)
+        runBlocking {
+            val content = call.response.contentChannel()!!.readInt()
+            assertEquals(100502, content)
+        }
     }
 }

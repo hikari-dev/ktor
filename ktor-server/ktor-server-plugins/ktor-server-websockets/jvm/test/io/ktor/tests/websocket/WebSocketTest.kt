@@ -165,9 +165,11 @@ class WebSocketTest {
                 }
             }
 
+            println("Server")
             handleWebSocket("/aaa") {
             }.let { call ->
                 runBlocking {
+                    println("Handling WS")
                     val channel = call.response.websocketChannel()!!
 
                     val parser = FrameParser()
@@ -186,6 +188,8 @@ class WebSocketTest {
                     assertEquals("aaa", bytes.toString(Charsets.ISO_8859_1))
                 }
             }
+
+            println("DONE")
         }
     }
 
