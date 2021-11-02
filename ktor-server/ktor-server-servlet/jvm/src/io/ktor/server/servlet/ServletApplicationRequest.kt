@@ -19,6 +19,11 @@ public abstract class ServletApplicationRequest(
     override val queryParameters: Parameters by lazy {
         servletRequest.queryString?.let { parseQueryString(it) } ?: Parameters.Empty
     }
+    override val rawQueryParameters: Parameters by lazy(LazyThreadSafetyMode.NONE) {
+        val uri = servletRequest.queryString
+        val queryStartIndex = uri.indexOf('?').takeIf { it != -1 } ?: return@lazy Parameters.Empty
+        parseQueryString(uri, startIndex = queryStartIndex + 1, decode = false)
+    }
 
     override val headers: Headers = ServletApplicationRequestHeaders(servletRequest)
 
