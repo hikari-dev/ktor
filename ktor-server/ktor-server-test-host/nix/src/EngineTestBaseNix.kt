@@ -9,6 +9,8 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.network.selector.*
+import io.ktor.network.sockets.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.routing.*
@@ -19,6 +21,9 @@ import io.ktor.utils.io.core.*
 import kotlinx.coroutines.*
 import kotlin.coroutines.*
 import kotlin.time.Duration.Companion.seconds
+
+@SharedImmutable
+private val TEST_SELECTOR_MANAGER = SelectorManager()
 
 actual abstract class EngineTestBase<TEngine : ApplicationEngine, TConfiguration : ApplicationEngine.Configuration> actual constructor( // ktlint-disable max-line-length
     actual val applicationEngineFactory: ApplicationEngineFactory<TEngine, TConfiguration>
@@ -32,7 +37,12 @@ actual abstract class EngineTestBase<TEngine : ApplicationEngine, TConfiguration
     @Retention
     protected actual annotation class Http2Only actual constructor()
 
-    protected actual var port: Int by shared(0)
+    protected actual var port: Int by shared(
+        aSocket(TEST_SELECTOR_MANAGER).tcp().bind().use {
+            it.localAddress.port
+        }
+    )
+
     protected actual var sslPort: Int by shared(0)
     protected actual var server: TEngine? by shared(null)
 
@@ -144,5 +154,4 @@ actual abstract class EngineTestBase<TEngine : ApplicationEngine, TConfiguration
             }
         }
     }
-
 }

@@ -64,8 +64,8 @@ internal class TCPServerSocketNative(
         TCPSocketNative(
             clientDescriptor,
             selectorManager,
-            remoteAddress = ResolvedNetworkAddress("", remoteAddress.port, remoteAddress),
-            localAddress = ResolvedNetworkAddress("", localAddress.port, localAddress),
+            remoteAddress = ResolvedNetworkAddress(remoteAddress.address, remoteAddress.port, remoteAddress),
+            localAddress = ResolvedNetworkAddress(localAddress.address, localAddress.port, localAddress),
             parent = selfContext() + coroutineContext
         )
     }

@@ -5,31 +5,20 @@
 package io.ktor.server.engine
 
 import io.ktor.http.*
-import io.ktor.http.cio.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.http.content.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
-import io.ktor.util.*
 import io.ktor.util.cio.*
-import io.ktor.util.cio.toByteArray
 import io.ktor.util.pipeline.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.charsets.*
 import io.ktor.utils.io.core.*
-import kotlinx.coroutines.*
-import kotlin.Any
-import kotlin.ByteArray
-import kotlin.IllegalStateException
-import kotlin.Long
-import kotlin.String
-import kotlin.arrayOf
-import kotlin.check
-import kotlin.let
-import kotlin.text.*
+import kotlin.native.concurrent.*
 
+@SharedImmutable
 private val ReusableTypes = arrayOf(ByteArray::class, String::class, Parameters::class)
 
 /**
@@ -56,6 +45,29 @@ public fun ApplicationReceivePipeline.installDefaultTransformations() {
                 charset = withContentType(call) { call.request.contentCharset() }
                     ?: Charsets.ISO_8859_1
             )
+            Parameters::class -> {
+                val contentType = withContentType(call) { call.request.contentType() }
+                when {
+                    contentType.match(ContentType.Application.FormUrlEncoded) -> {
+                        val string = channel.readText(charset = call.request.contentCharset() ?: Charsets.ISO_8859_1)
+                        parseQueryString(string)
+                    }
+                    contentType.match(ContentType.MultiPart.FormData) -> {
+                        Parameters.build {
+                            multiPartData(channel).forEachPart { part ->
+                                if (part is PartData.FormItem) {
+                                    part.name?.let { partName ->
+                                        append(partName, part.value)
+                                    }
+                                }
+
+                                part.dispose()
+                            }
+                        }
+                    }
+                    else -> null // Respond UnsupportedMediaType? but what if someone else later would like to do it?
+                }
+            }
             else -> defaultPlatformTransformations(query)
         }
         if (transformed != null) {
@@ -67,6 +79,8 @@ public fun ApplicationReceivePipeline.installDefaultTransformations() {
 internal expect suspend fun PipelineContext<ApplicationReceiveRequest, ApplicationCall>.defaultPlatformTransformations(
     query: ApplicationReceiveRequest
 ): Any?
+
+internal expect fun PipelineContext<*, ApplicationCall>.multiPartData(rc: ByteReadChannel): MultiPartData
 
 internal inline fun <R> withContentType(call: ApplicationCall, block: () -> R): R = try {
     block()
@@ -91,7 +105,6 @@ internal suspend fun ByteReadChannel.readText(
         } else {
             content.readTextWithCustomCharset(charset)
         }
-
     } finally {
         content.release()
     }

@@ -13,4 +13,3 @@ class CIOHttpServerTest : HttpServerCommonTestSuite<CIOApplicationEngine, CIOApp
         enableSsl = false
     }
 }
-

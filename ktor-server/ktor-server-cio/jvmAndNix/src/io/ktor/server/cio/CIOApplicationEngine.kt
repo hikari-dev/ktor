@@ -13,6 +13,8 @@ import io.ktor.server.engine.*
 import io.ktor.util.*
 import io.ktor.util.network.*
 import io.ktor.util.pipeline.*
+import io.ktor.utils.io.*
+import io.ktor.utils.io.concurrent.*
 import kotlinx.coroutines.*
 
 /**
@@ -35,12 +37,7 @@ public class CIOApplicationEngine(
         public var connectionIdleTimeoutSeconds: Int = 45
     }
 
-    private val configuration = Configuration().apply(configure)
-
-    private val corePoolSize: Int = maxOf(
-        configuration.connectionGroupSize + configuration.workerGroupSize,
-        environment.connectors.size + 1 // number of selectors + 1
-    )
+    private val configuration: Configuration by shared(Configuration().apply(configure))
 
     @OptIn(InternalCoroutinesApi::class)
     private val engineDispatcher = Dispatchers.IOBridge
@@ -51,7 +48,7 @@ public class CIOApplicationEngine(
     private val startupJob: CompletableDeferred<Unit> = CompletableDeferred()
     private val stopRequest: CompletableJob = Job()
 
-    private var serverJob: Job
+    private var serverJob: Job by shared(Job())
 
     init {
         serverJob = initServerJob()
@@ -144,49 +141,57 @@ public class CIOApplicationEngine(
         }
     }
 
-    private fun initServerJob(): Job = CoroutineScope(
-        environment.parentCoroutineContext + engineDispatcher
-    ).launch(start = CoroutineStart.LAZY) {
-        val connectors = ArrayList<HttpServer>(environment.connectors.size)
+    private fun initServerJob(): Job {
+        val environment = environment
+        val userDispatcher = userDispatcher
+        val stopRequest = stopRequest
+        val startupJob = startupJob
+        val cioConnectors = resolvedConnectors
 
-        try {
-            environment.connectors.forEach { connectorSpec ->
-                if (connectorSpec.type == ConnectorType.HTTPS) {
-                    throw UnsupportedOperationException(
-                        "CIO Engine does not currently support HTTPS. Please " +
-                            "consider using a different engine if you require HTTPS"
-                    )
+        return CoroutineScope(
+            environment.parentCoroutineContext + engineDispatcher
+        ).launch(start = CoroutineStart.LAZY) {
+            val connectors = ArrayList<HttpServer>(environment.connectors.size)
+
+            try {
+                environment.connectors.forEach { connectorSpec ->
+                    if (connectorSpec.type == ConnectorType.HTTPS) {
+                        throw UnsupportedOperationException(
+                            "CIO Engine does not currently support HTTPS. Please " +
+                                "consider using a different engine if you require HTTPS"
+                        )
+                    }
                 }
+
+                withContext(userDispatcher) {
+                    environment.start()
+                }
+
+                val connectorsAndServers = environment.connectors.map { connectorSpec ->
+                    connectorSpec to startConnector(connectorSpec.host, connectorSpec.port)
+                }
+                connectors.addAll(connectorsAndServers.map { it.second })
+
+                val resolvedConnectors = connectorsAndServers
+                    .map { (connector, server) -> connector to server.serverSocket.await() }
+                    .map { (connector, socket) -> connector.withPort(socket.localAddress.port) }
+                cioConnectors.complete(resolvedConnectors)
+            } catch (cause: Throwable) {
+                connectors.forEach { it.rootServerJob.cancel() }
+                stopRequest.completeExceptionally(cause)
+                startupJob.completeExceptionally(cause)
+                throw cause
             }
+
+            startupJob.complete(Unit)
+            stopRequest.join()
+
+            // stopping
+            connectors.forEach { it.acceptJob.cancel() }
 
             withContext(userDispatcher) {
-                environment.start()
+                environment.monitor.raise(ApplicationStopPreparing, environment)
             }
-
-            val connectorsAndServers = environment.connectors.map { connectorSpec ->
-                connectorSpec to startConnector(connectorSpec.host, connectorSpec.port)
-            }
-            connectors.addAll(connectorsAndServers.map { it.second })
-
-            val resolvedConnectors = connectorsAndServers
-                .map { (connector, server) -> connector to server.serverSocket.await() }
-                .map { (connector, socket) -> connector.withPort(socket.localAddress.port) }
-            this@CIOApplicationEngine.resolvedConnectors.complete(resolvedConnectors)
-        } catch (cause: Throwable) {
-            connectors.forEach { it.rootServerJob.cancel() }
-            stopRequest.completeExceptionally(cause)
-            startupJob.completeExceptionally(cause)
-            throw cause
-        }
-
-        startupJob.complete(Unit)
-        stopRequest.join()
-
-        // stopping
-        connectors.forEach { it.acceptJob.cancel() }
-
-        withContext(userDispatcher) {
-            environment.monitor.raise(ApplicationStopPreparing, environment)
         }
     }
 }

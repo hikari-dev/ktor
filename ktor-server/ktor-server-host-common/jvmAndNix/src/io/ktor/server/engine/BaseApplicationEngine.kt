@@ -62,9 +62,11 @@ public abstract class BaseApplicationEngine(
             }
         }
 
+        val connectors = resolvedConnectors
+        val log = environment.log
         CoroutineScope(environment.application.coroutineContext).launch {
-            resolvedConnectors.await().forEach {
-                environment.log.info(
+            connectors.await().forEach {
+                log.info(
                     "Responding at ${it.type.name.lowercase()}://${it.host}:${it.port}"
                 )
             }

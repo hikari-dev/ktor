@@ -14,9 +14,16 @@ import kotlin.native.concurrent.*
  */
 public class ParserException(message: String) : Exception(message)
 
+@SharedImmutable
 private const val HTTP_LINE_LIMIT = 8192
+
+@SharedImmutable
 private const val HTTP_STATUS_CODE_MIN_RANGE = 100
+
+@SharedImmutable
 private const val HTTP_STATUS_CODE_MAX_RANGE = 999
+
+@SharedImmutable
 private val hostForbiddenSymbols = setOf('/', '?', '#', '@')
 
 /**
@@ -48,7 +55,6 @@ public suspend fun parseRequest(input: ByteReadChannel): Request? {
             return Request(method, uri, version, headers, builder)
         }
     } catch (t: Throwable) {
-        println("Parsing: $t")
         builder.release()
         throw t
     }

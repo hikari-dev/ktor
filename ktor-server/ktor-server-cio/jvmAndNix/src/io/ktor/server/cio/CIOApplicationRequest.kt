@@ -12,6 +12,7 @@ import io.ktor.server.request.*
 import io.ktor.util.*
 import io.ktor.util.network.*
 import io.ktor.utils.io.*
+import io.ktor.utils.io.concurrent.*
 
 internal class CIOApplicationRequest(
     call: ApplicationCall,
@@ -20,17 +21,17 @@ internal class CIOApplicationRequest(
     private val input: ByteReadChannel,
     private val request: Request
 ) : BaseApplicationRequest(call) {
-    override val cookies: RequestCookies by lazy(LazyThreadSafetyMode.NONE) { RequestCookies(this) }
+    override val cookies: RequestCookies by sharedLazy { RequestCookies(this) }
 
     override fun receiveChannel() = input
 
     @OptIn(InternalAPI::class)
     override val headers: Headers = CIOHeaders(request.headers)
 
-    override val queryParameters: Parameters by lazy(LazyThreadSafetyMode.NONE) {
+    override val queryParameters: Parameters by sharedLazy {
         val uri = request.uri
         val qIdx = uri.indexOf('?')
-        if (qIdx == -1 || qIdx == uri.lastIndex) return@lazy Parameters.Empty
+        if (qIdx == -1 || qIdx == uri.lastIndex) return@sharedLazy Parameters.Empty
 
         parseQueryString(uri.substring(qIdx + 1))
     }
@@ -60,7 +61,10 @@ internal class CIOApplicationRequest(
             get() = HttpMethod.parse(request.method.value)
 
         override val remoteHost: String
-            get() = remoteAddress?.hostname ?: "unknown"
+            get() {
+                println("RA: $remoteAddress")
+                return remoteAddress?.hostname ?: "unknown"
+            }
     }
 
     internal fun release() {

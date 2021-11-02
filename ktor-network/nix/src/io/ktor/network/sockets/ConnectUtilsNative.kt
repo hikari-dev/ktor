@@ -64,10 +64,12 @@ internal actual fun bind(
 
     listen(descriptor, DEFAULT_BACKLOG_SIZE).check()
 
+    val localAddress = getLocalAddress(descriptor)
+
     return TCPServerSocketNative(
         descriptor,
         selector,
-        localAddress = localAddress ?: ResolvedNetworkAddress("0.0.0.0", address.port, address),
+        localAddress = NetworkAddress(localAddress.address, localAddress.port),
         parent = selector.coroutineContext
     )
 }

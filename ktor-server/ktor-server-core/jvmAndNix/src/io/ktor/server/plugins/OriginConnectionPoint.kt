@@ -8,6 +8,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.util.*
+import io.ktor.utils.io.concurrent.*
 import kotlin.native.concurrent.*
 import kotlin.reflect.*
 
@@ -48,7 +49,7 @@ public class MutableOriginConnectionPoint internal constructor(
 }
 
 private class AssignableWithDelegate<T : Any>(val property: () -> T) {
-    private var assigned: T? = null
+    private var assigned: T? by shared(null)
 
     @Suppress("UNCHECKED_CAST")
     operator fun getValue(thisRef: Any, property: KProperty<*>): T = assigned ?: property()

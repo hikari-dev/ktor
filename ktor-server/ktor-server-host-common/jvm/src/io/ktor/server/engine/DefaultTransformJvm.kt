@@ -21,41 +21,18 @@ import java.io.*
 
 internal actual suspend fun PipelineContext<ApplicationReceiveRequest, ApplicationCall>.defaultPlatformTransformations(
     query: ApplicationReceiveRequest
-) : Any? {
+): Any? {
     val channel = query.value as? ByteReadChannel ?: return null
 
     return when (query.typeInfo.type) {
         InputStream::class -> receiveGuardedInputStream(channel)
         MultiPartData::class -> multiPartData(channel)
-        Parameters::class -> {
-            val contentType = withContentType(call) { call.request.contentType() }
-            when {
-                contentType.match(ContentType.Application.FormUrlEncoded) -> {
-                    val string = channel.readText(charset = call.request.contentCharset() ?: Charsets.ISO_8859_1)
-                    parseQueryString(string)
-                }
-                contentType.match(ContentType.MultiPart.FormData) -> {
-                    Parameters.build {
-                        multiPartData(channel).forEachPart { part ->
-                            if (part is PartData.FormItem) {
-                                part.name?.let { partName ->
-                                    append(partName, part.value)
-                                }
-                            }
-
-                            part.dispose()
-                        }
-                    }
-                }
-                else -> null // Respond UnsupportedMediaType? but what if someone else later would like to do it?
-            }
-        }
         else -> null
     }
 }
 
 @OptIn(InternalAPI::class)
-private fun PipelineContext<*, ApplicationCall>.multiPartData(rc: ByteReadChannel): MultiPartData {
+internal actual fun PipelineContext<*, ApplicationCall>.multiPartData(rc: ByteReadChannel): MultiPartData {
     val contentType = call.request.header(HttpHeaders.ContentType)
         ?: throw IllegalStateException("Content-Type header is required for multipart processing")
 

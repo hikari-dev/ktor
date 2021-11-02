@@ -5,6 +5,7 @@
 package io.ktor.server.util
 
 import io.ktor.util.*
+import kotlin.native.concurrent.*
 
 /**
  * Process path components such as `.` and `..`, replacing redundant path components including all leading.
@@ -59,12 +60,17 @@ private fun MutableList<String>.processAndReplaceComponent(component: String) {
         }
 }
 
+@SharedImmutable
 private val FirstReservedLetters = charArrayOf('A', 'a', 'C', 'c', 'l', 'L', 'P', 'p', 'n', 'N').toASCIITable()
+
+@SharedImmutable
 private val ReservedWords = setOf(
     "CON", "PRN", "AUX", "NUL",
     "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
     "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
 )
+
+@SharedImmutable
 private val ReservedCharacters = charArrayOf('\\', '/', ':', '*', '?', '\"', '<', '>', '|').toASCIITable()
 
 @Suppress("LocalVariableName")

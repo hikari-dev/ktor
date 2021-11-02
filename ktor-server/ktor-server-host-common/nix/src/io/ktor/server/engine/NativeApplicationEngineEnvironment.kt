@@ -24,28 +24,22 @@ public class NativeApplicationEngineEnvironment(
 
     override val monitor: Events = Events()
 
-    private var _application: Application? by atomic(null)
-
-    override val application: Application get() = _application ?: error("Application was not started")
+    override val application: Application = Application(this)
 
     override fun start() {
-        val newInstance = Application(this)
-        safeRiseEvent(ApplicationStarting, newInstance)
+        safeRiseEvent(ApplicationStarting, application)
         try {
-            modules.forEach { newInstance.it() }
+            modules.forEach { application.it() }
         } catch (cause: Throwable) {
             log.error("Failed to start application.", cause)
-            destroy(newInstance)
+            destroy(application)
             throw cause
         }
-        safeRiseEvent(ApplicationStarted, newInstance)
-        _application = newInstance
+        safeRiseEvent(ApplicationStarted, application)
     }
 
     override fun stop() {
-        val currentApplication = _application ?: return
-        _application = null
-        destroy(currentApplication)
+        destroy(application)
     }
 
     private fun destroy(application: Application) {

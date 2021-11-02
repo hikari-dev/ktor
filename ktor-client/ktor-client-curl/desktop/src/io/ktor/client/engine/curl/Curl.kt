@@ -19,6 +19,7 @@ import kotlin.native.SharedImmutable
 private val curlGlobalInitReturnCode = curl_global_init(CURL_GLOBAL_ALL.convert())
 
 @Suppress("unused")
+@SharedImmutable
 private val initHook = Curl
 
 /**
